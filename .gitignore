@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Build Output
+dist/
+
+# Environment file
+.env
+
+# Local Telemetry State Cache
+.telemetry/
+
+# OS / Editor Files
+.DS_Store
+Thumbs.db
+*.log
