@@ -11,11 +11,13 @@ export interface TelemetryState {
 
 export class TelemetryStore {
   private storageDir: string;
-  private stateFilePath: string;
+  private primaryFilePath: string;
+  private fallbackFilePath: string;
 
   constructor(customDir?: string) {
     this.storageDir = customDir || path.join(process.cwd(), '.telemetry');
-    this.stateFilePath = path.join(this.storageDir, 'state.json');
+    this.primaryFilePath = path.join(this.storageDir, 'cache.json');
+    this.fallbackFilePath = path.join(this.storageDir, 'state.json');
   }
 
   private getTodayDateString(): string {
@@ -39,22 +41,39 @@ export class TelemetryStore {
 
   public loadState(): TelemetryState {
     try {
-      if (!fs.existsSync(this.stateFilePath)) {
-        return this.getInitialState();
+      let targetFile = this.primaryFilePath;
+      if (!fs.existsSync(targetFile) && fs.existsSync(this.fallbackFilePath)) {
+        targetFile = this.fallbackFilePath;
       }
-      const data = fs.readFileSync(this.stateFilePath, 'utf-8');
+
+      if (!fs.existsSync(targetFile)) {
+        const initialState = this.getInitialState();
+        this.saveState(initialState);
+        return initialState;
+      }
+
+      const data = fs.readFileSync(targetFile, 'utf-8');
       const state: TelemetryState = JSON.parse(data);
       const today = this.getTodayDateString();
 
-      // If stored state is from a previous day, start fresh for today
+      // Reset state if date has changed overnight
       if (state.date !== today) {
-        return this.getInitialState();
+        const freshState = this.getInitialState();
+        this.saveState(freshState);
+        return freshState;
+      }
+
+      // Ensure cache.json is synced if read from state.json
+      if (!fs.existsSync(this.primaryFilePath)) {
+        this.saveState(state);
       }
 
       return state;
     } catch (err) {
       console.warn('⚠️ Warning: Failed to load telemetry state cache. Starting fresh state.', err);
-      return this.getInitialState();
+      const freshState = this.getInitialState();
+      this.saveState(freshState);
+      return freshState;
     }
   }
 
@@ -63,7 +82,11 @@ export class TelemetryStore {
       if (!fs.existsSync(this.storageDir)) {
         fs.mkdirSync(this.storageDir, { recursive: true });
       }
-      fs.writeFileSync(this.stateFilePath, JSON.stringify(state, null, 2), 'utf-8');
+      const data = JSON.stringify(state, null, 2);
+      // Write to .telemetry/cache.json as primary persistent store
+      fs.writeFileSync(this.primaryFilePath, data, 'utf-8');
+      // Also write to .telemetry/state.json for fallback compatibility
+      fs.writeFileSync(this.fallbackFilePath, data, 'utf-8');
     } catch (err) {
       console.error('❌ Error saving telemetry state cache:', err);
     }

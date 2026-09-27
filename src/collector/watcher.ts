@@ -19,7 +19,10 @@ const DEFAULT_IGNORED = [
   '**/*.log',
   '**/*.tmp',
   '**/*.swp',
-  '**/*.bak'
+  '**/*.bak',
+  '**/*~',
+  '**/.DS_Store',
+  '**/Thumbs.db'
 ];
 
 export class FileWatcher {
@@ -34,6 +37,20 @@ export class FileWatcher {
     this.onFileChange = options.onFileChange;
   }
 
+  public isNoisyPath(filepath: string): boolean {
+    const normalized = filepath.replace(/\\/g, '/');
+    const segments = normalized.split('/');
+    const noisyFolders = ['.git', '.telemetry', 'node_modules', 'dist', 'bin', 'obj', '.vs', '.vscode', '.idea'];
+    if (segments.some(seg => noisyFolders.includes(seg))) {
+      return true;
+    }
+    return (
+      /\.(log|tmp|swp|bak)$/i.test(normalized) ||
+      /(^|\/)(\.DS_Store|Thumbs\.db)$/i.test(normalized) ||
+      normalized.endsWith('~')
+    );
+  }
+
   public start(): void {
     if (this.watcher) return;
 
@@ -44,8 +61,12 @@ export class FileWatcher {
     });
 
     const handleEvent = (eventType: string) => (filepath: string) => {
+      const normalizedPath = path.normalize(filepath);
+      if (this.isNoisyPath(normalizedPath)) {
+        return; // Defense-in-depth filter for noisy paths
+      }
       if (this.onFileChange) {
-        this.onFileChange(path.normalize(filepath), eventType);
+        this.onFileChange(normalizedPath, eventType);
       }
     };
 
@@ -54,7 +75,7 @@ export class FileWatcher {
       .on('change', handleEvent('change'))
       .on('unlink', handleEvent('unlink'));
 
-    console.log(`📡 FileWatcher listening on: ${this.directories.join(', ')}`);
+    console.log(`📡 FileWatcher active on: ${this.directories.join(', ')}`);
   }
 
   public async stop(): Promise<void> {

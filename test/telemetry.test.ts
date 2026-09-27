@@ -2,6 +2,7 @@ import assert from 'assert';
 import fs from 'fs';
 import path from 'path';
 import { GitCollector } from '../src/collector/git';
+import { FileWatcher } from '../src/collector/watcher';
 import { TelemetryStore } from '../src/storage';
 import { SessionTracker } from '../src/aggregator/session';
 import { DiscordDispatcher } from '../src/dispatcher';
@@ -17,7 +18,20 @@ assert.strictEqual(gitCollector.detectLanguage('App.cs'), 'C#');
 assert.strictEqual(gitCollector.detectLanguage('main.cpp'), 'C++');
 assert.strictEqual(gitCollector.detectLanguage('queries.sql'), 'SQL');
 assert.strictEqual(gitCollector.detectLanguage('unknown.xyz'), 'XYZ');
-console.log('  ✅ Language detection tests passed.');
+assert.strictEqual(typeof gitCollector.getGitStatText(), 'string');
+console.log('  ✅ Language detection and git stat tests passed.');
+
+// 1b. Test FileWatcher Noise Filtering
+console.log('Test 1b: FileWatcher Noise Filtering');
+const watcher = new FileWatcher();
+assert.strictEqual(watcher.isNoisyPath('node_modules/package/index.js'), true);
+assert.strictEqual(watcher.isNoisyPath('.git/HEAD'), true);
+assert.strictEqual(watcher.isNoisyPath('.telemetry/state.json'), true);
+assert.strictEqual(watcher.isNoisyPath('dist/bundle.js'), true);
+assert.strictEqual(watcher.isNoisyPath('subfolder/Thumbs.db'), true);
+assert.strictEqual(watcher.isNoisyPath('backup.swp'), true);
+assert.strictEqual(watcher.isNoisyPath('src/collector/watcher.ts'), false);
+console.log('  ✅ FileWatcher noise filtering tests passed.');
 
 // 2. Test TelemetryStore Persistence
 console.log('Test 2: TelemetryStore State Persistence');

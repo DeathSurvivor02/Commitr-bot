@@ -7,6 +7,7 @@ export interface GitDiffSummary {
   filesChanged: number;
   languageStats: Record<string, { lines: number; files: number }>;
   commitsToday: string[];
+  statSummaryText: string;
 }
 
 const LANGUAGE_MAP: Record<string, string> = {
@@ -42,6 +43,18 @@ export class GitCollector {
   public detectLanguage(filepath: string): string {
     const ext = path.extname(filepath).toLowerCase();
     return LANGUAGE_MAP[ext] || (ext ? ext.toUpperCase().slice(1) : 'Other');
+  }
+
+  public getGitStatText(): string {
+    try {
+      return execSync('git diff HEAD --stat', { cwd: this.cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+    } catch {
+      try {
+        return execSync('git diff --stat', { cwd: this.cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+      } catch {
+        return '';
+      }
+    }
   }
 
   public getGitMetrics(): GitDiffSummary {
@@ -82,11 +95,10 @@ export class GitCollector {
       uncommittedStat.split('\n').filter(Boolean).forEach(processNumstatLine);
     } catch {
       try {
-        // Fallback if HEAD doesn't exist (e.g., initial commit before any commit)
         const uncommittedStat = execSync('git diff --numstat', { cwd: this.cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] });
         uncommittedStat.split('\n').filter(Boolean).forEach(processNumstatLine);
       } catch {
-        // Not a git repo or error running git diff
+        // Not a git repo or git not available
       }
     }
 
@@ -109,12 +121,15 @@ export class GitCollector {
       // Not a git repo or no git log available
     }
 
+    const statSummaryText = this.getGitStatText();
+
     return {
       linesAdded,
       linesDeleted,
       filesChanged: fileSet.size,
       languageStats,
-      commitsToday
+      commitsToday,
+      statSummaryText
     };
   }
 }
