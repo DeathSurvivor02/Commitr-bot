@@ -16,6 +16,12 @@ const DEFAULT_IGNORED = [
   '**/.vs/**',
   '**/.vscode/**',
   '**/.idea/**',
+  '**/.gradle/**',
+  '**/__pycache__/**',
+  '**/.venv/**',
+  '**/venv/**',
+  '**/build/**',
+  '**/target/**',
   '**/*.log',
   '**/*.tmp',
   '**/*.swp',
@@ -38,14 +44,18 @@ export class FileWatcher {
   }
 
   public isNoisyPath(filepath: string): boolean {
+    if (!filepath) return false;
     const normalized = filepath.replace(/\\/g, '/');
     const segments = normalized.split('/');
-    const noisyFolders = ['.git', '.telemetry', 'node_modules', 'dist', 'bin', 'obj', '.vs', '.vscode', '.idea'];
-    if (segments.some(seg => noisyFolders.includes(seg))) {
+    const noisyFolders = [
+      '.git', '.telemetry', 'node_modules', 'dist', 'bin', 'obj',
+      '.vs', '.vscode', '.idea', '.gradle', '__pycache__', '.venv', 'venv', 'target', 'build'
+    ];
+    if (segments.some(seg => noisyFolders.includes(seg.toLowerCase()))) {
       return true;
     }
     return (
-      /\.(log|tmp|swp|bak)$/i.test(normalized) ||
+      /\.(log|tmp|swp|bak|dll|exe|pdb|cache|suo|user)$/i.test(normalized) ||
       /(^|\/)(\.DS_Store|Thumbs\.db)$/i.test(normalized) ||
       normalized.endsWith('~')
     );
@@ -55,9 +65,10 @@ export class FileWatcher {
     if (this.watcher) return;
 
     this.watcher = chokidar.watch(this.directories, {
-      ignored: DEFAULT_IGNORED,
+      ignored: (filePath: string) => this.isNoisyPath(filePath),
       persistent: true,
-      ignoreInitial: true
+      ignoreInitial: true,
+      ignorePermissionErrors: true
     });
 
     const handleEvent = (eventType: string) => (filepath: string) => {
@@ -73,7 +84,11 @@ export class FileWatcher {
     this.watcher
       .on('add', handleEvent('add'))
       .on('change', handleEvent('change'))
-      .on('unlink', handleEvent('unlink'));
+      .on('unlink', handleEvent('unlink'))
+      .on('error', (err: any) => {
+        // Prevent unhandled error events from crashing the process
+        console.warn(`⚠️ Non-fatal FileWatcher warning (${err.code || err.message})`);
+      });
 
     console.log(`📡 FileWatcher active on: ${this.directories.join(', ')}`);
   }

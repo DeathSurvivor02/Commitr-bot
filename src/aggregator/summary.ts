@@ -41,14 +41,35 @@ export class DailySummaryAggregator {
         }))
         .sort((a, b) => b.percentage - a.percentage)
         .forEach(item => topLanguages.push(item));
+    } else if (Object.keys(state.modifiedFiles).length > 0) {
+      const langEventCounts: Record<string, number> = {};
+      let totalEvents = 0;
+      for (const [file, count] of Object.entries(state.modifiedFiles)) {
+        const lang = this.gitCollector.detectLanguage(file);
+        langEventCounts[lang] = (langEventCounts[lang] || 0) + count;
+        totalEvents += count;
+      }
+      if (totalEvents > 0) {
+        Object.entries(langEventCounts)
+          .map(([lang, count]) => ({
+            language: lang,
+            percentage: Math.round((count / totalEvents) * 100)
+          }))
+          .sort((a, b) => b.percentage - a.percentage)
+          .forEach(item => topLanguages.push(item));
+      }
     }
+
+    const filesCount = gitMetrics.filesChanged > 0 
+      ? gitMetrics.filesChanged 
+      : Object.keys(state.modifiedFiles).length;
 
     return {
       date: state.date,
       activeDurationText,
       linesAdded: gitMetrics.linesAdded,
       linesDeleted: gitMetrics.linesDeleted,
-      filesChanged: gitMetrics.filesChanged,
+      filesChanged: filesCount,
       fileEventsCount: state.fileEventsCount,
       topLanguages,
       commitsToday: gitMetrics.commitsToday
